@@ -2,6 +2,8 @@ import yfinance as yf
 import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
+from datetime import datetime
+
 matplotlib.use('Agg')
 
 
@@ -16,17 +18,16 @@ def calculate_moving_averages(data, short_window, long_window):
 
 
 def generate_signals(data, short_window, long_window):
-    data.loc[data.index[short_window:], 'Signal'] = np.where(
-        data[f'SMA{short_window}'][short_window:] > data[f'SMA{long_window}'][short_window:], 1, 0)
-    data['Position'] = data['Signal'].diff()
+    data['Signal'] = np.where(data[f'SMA{short_window}'] > data[f'SMA{long_window}'], 1, 0)
+    data['Position'] = data['Signal'].shift()
     return data
 
 
-def calculate_strategy_performance(data):
+def calculate_strategy_performance(data, capital):
     data['Returns'] = data['Close'].pct_change()
     data['Strategy_Returns'] = data['Returns'] * data['Position'].shift(1)
 
-    data['Equity_Curve'] = (1 + data['Strategy_Returns']).cumprod()
+    data['Equity_Curve'] = capital * (1 + data['Strategy_Returns']).cumprod()
 
     data['Cumulative_Max'] = data['Equity_Curve'].cummax()
     data['Drawdown'] = (data['Equity_Curve'] - data['Cumulative_Max']) / data['Cumulative_Max']
@@ -47,10 +48,11 @@ def plot_equity_curve(data, filename):
 def main():
     ticker = 'SPY'
     start_date = "2020-01-01"
-    end_date = "2024-10-24"
+    end_date = datetime.today().strftime('%Y-%m-%d')
     short_window = 7
     long_window = 20
     filename = 'SMA-Cross\\equity_curve.png'
+    capital = 10000
 
     data = download_data(ticker, start_date, end_date)
 
@@ -58,7 +60,7 @@ def main():
 
     data = generate_signals(data, short_window, long_window)
 
-    sharpe_ratio, max_drawdown = calculate_strategy_performance(data)
+    sharpe_ratio, max_drawdown = calculate_strategy_performance(data, capital)
 
     print(f"Sharpe Ratio: {sharpe_ratio:.2f}")
     print(f"Max Drawdown: {max_drawdown:.2%}")
